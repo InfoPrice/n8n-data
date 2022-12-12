@@ -1,4 +1,5 @@
 import express from 'express';
+import { v4 as uuid } from 'uuid';
 import * as Db from '@/Db';
 import { InternalHooksManager } from '@/InternalHooksManager';
 import * as ResponseHelper from '@/ResponseHelper';
@@ -97,10 +98,9 @@ EEWorkflowController.get(
 			);
 		}
 
-		return EEWorkflows.addCredentialsToWorkflow(
-			EEWorkflows.addOwnerAndSharings(workflow),
-			req.user,
-		);
+		EEWorkflows.addOwnerAndSharings(workflow);
+		await EEWorkflows.addCredentialsToWorkflow(workflow, req.user);
+		return workflow;
 	}),
 );
 
@@ -112,6 +112,8 @@ EEWorkflowController.post(
 		const newWorkflow = new WorkflowEntity();
 
 		Object.assign(newWorkflow, req.body);
+
+		newWorkflow.versionId = uuid();
 
 		await validateEntity(newWorkflow);
 
@@ -200,9 +202,12 @@ EEWorkflowController.get(
 		)) as unknown as WorkflowEntity[];
 
 		return Promise.all(
-			workflows.map(async (workflow) =>
-				EEWorkflows.addCredentialsToWorkflow(EEWorkflows.addOwnerAndSharings(workflow), req.user),
-			),
+			workflows.map(async (workflow) => {
+				EEWorkflows.addOwnerAndSharings(workflow);
+				await EEWorkflows.addCredentialsToWorkflow(workflow, req.user);
+				workflow.nodes = [];
+				return workflow;
+			}),
 		);
 	}),
 );
@@ -211,7 +216,7 @@ EEWorkflowController.patch(
 	'/:id(\\d+)',
 	ResponseHelper.send(async (req: WorkflowRequest.Update) => {
 		const { id: workflowId } = req.params;
-		// const forceSave = req.query.forceSave === 'true'; // disabled temporarily - tests were also disabled
+		const forceSave = req.query.forceSave === 'true';
 
 		const updateData = new WorkflowEntity();
 		const { tags, ...rest } = req.body;
@@ -224,7 +229,7 @@ EEWorkflowController.patch(
 			safeWorkflow,
 			workflowId,
 			tags,
-			true,
+			forceSave,
 		);
 
 		const { id, ...remainder } = updatedWorkflow;

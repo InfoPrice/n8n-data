@@ -5,7 +5,8 @@ const WorkflowsPage = new WorkflowsPageClass();
 const WorkflowPage = new WorkflowPageClass();
 
 describe('HTTP Request node', () => {
-	beforeEach(() => {
+	before(() => {
+		cy.resetAll();
 		cy.skipSetup();
 	});
 
@@ -14,10 +15,10 @@ describe('HTTP Request node', () => {
 		WorkflowPage.actions.addInitialNodeToCanvas('Manual Trigger');
 		WorkflowPage.actions.addNodeToCanvas('HTTP Request');
 		WorkflowPage.actions.openNodeNdv('HTTP Request');
-		WorkflowPage.actions.typeIntoParameterInput('url', 'https://google.com');
+		WorkflowPage.actions.typeIntoParameterInput('url', 'https://catfact.ninja/fact');
 
 		WorkflowPage.actions.executeNodeFromNdv();
 
-		WorkflowPage.getters.ndvOutputPanel().contains('<!doctype html>');
+		WorkflowPage.getters.ndvOutputPanel().contains('fact');
 	});
 });

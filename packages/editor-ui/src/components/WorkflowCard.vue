@@ -2,7 +2,6 @@
 	<n8n-card
 		:class="$style.cardLink"
 		@click="onClick"
-		data-test-id="workflow-card"
 	>
 			<template #header>
 				<n8n-heading tag="h2" bold class="ph-no-capture" :class="$style.cardHeading" data-test-id="workflow-card-name">
@@ -105,7 +104,7 @@ export default mixins(
 				name: '',
 				sharedWith: [],
 				ownedBy: {} as IUser,
-				hash: '',
+				versionId: '',
 			}),
 		},
 		readonly: {

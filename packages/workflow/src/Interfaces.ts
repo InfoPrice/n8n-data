@@ -27,7 +27,7 @@ export type IAllExecuteFunctions =
 	| ITriggerFunctions
 	| IWebhookFunctions;
 
-export type BinaryFileType = 'text' | 'image' | 'video';
+export type BinaryFileType = 'text' | 'json' | 'image' | 'video';
 export interface IBinaryData {
 	[key: string]: string | undefined;
 	data: string;
@@ -181,11 +181,7 @@ export interface IHttpRequestHelper {
 	helpers: { httpRequest: IAllExecuteFunctions['helpers']['httpRequest'] };
 }
 export abstract class ICredentialsHelper {
-	encryptionKey: string;
-
-	constructor(encryptionKey: string) {
-		this.encryptionKey = encryptionKey;
-	}
+	constructor(readonly encryptionKey: string) {}
 
 	abstract getParentTypes(name: string): string[];
 
@@ -329,6 +325,7 @@ export interface ICredentialType {
 export interface ICredentialTypes {
 	recognizes(credentialType: string): boolean;
 	getByName(credentialType: string): ICredentialType;
+	getNodeTypesToTestWith(type: string): string[];
 }
 
 // The way the credentials get saved in the database (data encrypted)
@@ -550,6 +547,10 @@ export interface IGetNodeParameterOptions {
 }
 
 namespace ExecuteFunctions {
+	namespace StringReturning {
+		export type NodeParameter = 'binaryProperty' | 'resource' | 'operation';
+	}
+
 	namespace NumberReturning {
 		export type NodeParameter = 'limit';
 	}
@@ -575,6 +576,12 @@ namespace ExecuteFunctions {
 			itemIndex?: number,
 		): T['resource'];
 
+		getNodeParameter(
+			parameterName: StringReturning.NodeParameter,
+			itemIndex: number,
+			fallbackValue?: string,
+			options?: IGetNodeParameterOptions,
+		): string;
 		getNodeParameter(
 			parameterName: RecordReturning.NodeParameter,
 			itemIndex: number,
@@ -612,6 +619,7 @@ export type IExecuteFunctions = ExecuteFunctions.GetNodeParameterFn & {
 	getContext(type: string): IContextObject;
 	getCredentials(type: string, itemIndex?: number): Promise<ICredentialDataDecryptedObject>;
 	getInputData(inputIndex?: number, inputName?: string): INodeExecutionData[];
+	getInputSourceData(inputIndex?: number, inputName?: string): ISourceData;
 	getMode(): WorkflowExecuteMode;
 	getNode(): INode;
 	getWorkflowDataProxy(itemIndex: number): IWorkflowDataProxyData;
@@ -647,6 +655,7 @@ export interface IExecuteSingleFunctions {
 	getContext(type: string): IContextObject;
 	getCredentials(type: string): Promise<ICredentialDataDecryptedObject>;
 	getInputData(inputIndex?: number, inputName?: string): INodeExecutionData;
+	getInputSourceData(inputIndex?: number, inputName?: string): ISourceData;
 	getItemIndex(): number;
 	getMode(): WorkflowExecuteMode;
 	getNode(): INode;
@@ -919,6 +928,7 @@ export interface IBinaryKeyData {
 export interface IPairedItemData {
 	item: number;
 	input?: number; // If undefined "0" gets used
+	sourceOverwrite?: ISourceData;
 }
 
 export interface INodeExecutionData {
@@ -1008,7 +1018,7 @@ export interface ILoadOptions {
 }
 
 export interface INodePropertyTypeOptions {
-	alwaysOpenEditWindow?: boolean; // Supported by: string
+	alwaysOpenEditWindow?: boolean; // Supported by: json
 	codeAutocomplete?: CodeAutocompleteTypes; // Supported by: string
 	editor?: EditorTypes; // Supported by: string
 	loadOptionsDependsOn?: string[]; // Supported by: options
@@ -1209,7 +1219,6 @@ export interface INodeCredentialTestResult {
 }
 
 export interface INodeCredentialTestRequest {
-	nodeToTestWith?: string; // node name i.e. slack
 	credentials: ICredentialsDecrypted;
 }
 
@@ -1249,7 +1258,7 @@ export interface INodeIssues {
 	[key: string]: undefined | boolean | INodeIssueObjectProperty;
 }
 
-export interface IWorfklowIssues {
+export interface IWorkflowIssues {
 	[key: string]: INodeIssues;
 }
 
@@ -1363,6 +1372,12 @@ export interface IPostReceiveSort extends IPostReceiveBase {
 	};
 }
 
+export interface INodeActionTypeDescription extends INodeTypeDescription {
+	displayOptions?: IDisplayOptions;
+	values?: IDataObject;
+	actionKey: string;
+}
+
 export interface INodeTypeDescription extends INodeTypeBaseDescription {
 	version: number | number[];
 	defaults: INodeParameters;
@@ -1401,6 +1416,7 @@ export interface INodeTypeDescription extends INodeTypeBaseDescription {
 					inactive: string;
 			  };
 	};
+	actions?: INodeActionTypeDescription[];
 }
 
 export interface INodeHookDescription {
@@ -1474,8 +1490,8 @@ export type WebhookResponseData = 'allEntries' | 'firstEntryJson' | 'firstEntryB
 export type WebhookResponseMode = 'onReceived' | 'lastNode';
 
 export interface INodeTypes {
-	getAll(): Array<INodeType | IVersionedNodeType>;
-	getByNameAndVersion(nodeType: string, version?: number): INodeType | undefined;
+	getByName(nodeType: string): INodeType | IVersionedNodeType;
+	getByNameAndVersion(nodeType: string, version?: number): INodeType;
 }
 
 export type LoadingDetails = {
@@ -1483,9 +1499,15 @@ export type LoadingDetails = {
 	sourcePath: string;
 };
 
+export type CredentialLoadingDetails = LoadingDetails & {
+	nodesToTestWith?: string[];
+};
+
+export type NodeLoadingDetails = LoadingDetails;
+
 export type KnownNodesAndCredentials = {
-	nodes: Record<string, LoadingDetails>;
-	credentials: Record<string, LoadingDetails>;
+	nodes: Record<string, NodeLoadingDetails>;
+	credentials: Record<string, CredentialLoadingDetails>;
 };
 
 export interface LoadedClass<T> {
