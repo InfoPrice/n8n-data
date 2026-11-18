@@ -7,7 +7,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: arc-runner-set-amd64
 
     timeout-minutes: 30
 
@@ -15,7 +15,21 @@ jobs:
       DB_MYSQLDB_PASSWORD: password
       DB_POSTGRESDB_PASSWORD: password
 
+    permissions:
+      id-token: write
+      contents: read
     steps:
+      - name: Segredos do Vault
+        id: vault
+        uses: hashicorp/vault-action@4c06c5ccf5c0761b6029f56cfb1dcf5565918a3b # v3
+        with:
+          url: https://vault.infopriceti.com.br
+          method: jwt
+          path: jwt-github
+          role: gha-n8n-data
+          exportEnv: false
+          secrets: |
+            secret/data/ci/slack SLACK_WEBHOOK_URL | SLACK_WEBHOOK_URL ;
       - uses: actions/checkout@v3
 
       - uses: pnpm/action-setup@v2.2.4
@@ -54,4 +68,4 @@ jobs:
         with:
           status: ${{ job.status }}
           channel: '#updates-build-alerts'
-          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-url: ${{ steps.vault.outputs.SLACK_WEBHOOK_URL }}
