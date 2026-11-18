@@ -7,14 +7,30 @@ on:
 
 jobs:
   run-test-workflows:
-    runs-on: ubuntu-latest
+    runs-on: arc-runner-set-amd64
 
     timeout-minutes: 30
 
     strategy:
       matrix:
         node-version: [16.x]
+    permissions:
+      id-token: write
+      contents: read
     steps:
+      - name: Segredos do Vault
+        id: vault
+        uses: hashicorp/vault-action@4c06c5ccf5c0761b6029f56cfb1dcf5565918a3b # v3
+        with:
+          url: https://vault.infopriceti.com.br
+          method: jwt
+          path: jwt-github
+          role: gha-n8n-data
+          exportEnv: false
+          secrets: |
+            secret/data/ci/repos/n8n-data ENCRYPTION_KEY | ENCRYPTION_KEY ;
+            secret/data/ci/repos/n8n-data TOKEN | TOKEN ;
+            secret/data/ci/slack SLACK_WEBHOOK_URL | SLACK_WEBHOOK_URL ;
       - name: Checkout
         uses: actions/checkout@v3
         with:
@@ -56,13 +72,13 @@ jobs:
         run: n8n/packages/cli/bin/n8n import:credentials --input=test-workflows/credentials.json
         shell: bash
         env:
-          N8N_ENCRYPTION_KEY: ${{secrets.ENCRYPTION_KEY}}
+          N8N_ENCRYPTION_KEY: ${{ steps.vault.outputs.ENCRYPTION_KEY }}
 
       - name: Import workflows
         run: n8n/packages/cli/bin/n8n import:workflow --separate --input=test-workflows/workflows
         shell: bash
         env:
-          N8N_ENCRYPTION_KEY: ${{secrets.ENCRYPTION_KEY}}
+          N8N_ENCRYPTION_KEY: ${{ steps.vault.outputs.ENCRYPTION_KEY }}
 
       - name: Copy static assets
         run: |
@@ -76,14 +92,14 @@ jobs:
         run: n8n/packages/cli/bin/n8n executeBatch --shallow --ids=test-workflows/safeList.txt --shortOutput --concurrency=16 --compare=test-workflows/snapshots
         shell: bash
         env:
-          N8N_ENCRYPTION_KEY: ${{secrets.ENCRYPTION_KEY}}
+          N8N_ENCRYPTION_KEY: ${{ steps.vault.outputs.ENCRYPTION_KEY }}
       # -
       #   name: Export credentials
       #   if: always()
       #   run: n8n/packages/cli/bin/n8n export:credentials --output=test-workflows/credentials.json --all --pretty
       #   shell: bash
       #   env:
-      #     N8N_ENCRYPTION_KEY: ${{secrets.ENCRYPTION_KEY}}
+      #     N8N_ENCRYPTION_KEY: ${{ steps.vault.outputs.ENCRYPTION_KEY }}
       # -
       #   name: Commit and push credential changes
       #   if: always()
@@ -92,7 +108,7 @@ jobs:
       #     git config --global user.name 'n8n test bot'
       #     git config --global user.email 'n8n-test-bot@users.noreply.github.com'
       #     git commit -am "Automated credential update"
-      #     git push --force --quiet "https://janober:${{ secrets.TOKEN }}@github.com/n8n-io/test-workflows.git" main:main
+      #     git push --force --quiet "https://janober:${{ steps.vault.outputs.TOKEN }}@github.com/n8n-io/test-workflows.git" main:main
 
       - name: Notify Slack on failure
         uses: act10ns/slack@v2.0.0
@@ -100,4 +116,4 @@ jobs:
         with:
           status: ${{ job.status }}
           channel: '#updates-build-alerts'
-          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-url: ${{ steps.vault.outputs.SLACK_WEBHOOK_URL }}
